@@ -1,0 +1,23 @@
+# Executables
+*.exe
+*.out
+
+# Object files
+*.o
+*.obj
+
+# Build folders
+build/
+cmake-build-*/
+
+# VS Code
+.vscode/
+
+# Visual Studio
+.vs/
+
+# Logs
+*.log
+
+# Temporary
+*.tmp
