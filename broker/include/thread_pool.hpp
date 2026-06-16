@@ -18,7 +18,10 @@ private:
     std::vector<Task> deadLetterQueue_;
 
     std::mutex dlqMutex_;
+std::vector<Task> delayedTasks_;
 
+std::mutex delayedMutex_;
+std::thread schedulerThread_;
     bool stop_;
 
 public:
@@ -45,14 +48,15 @@ public:
     break;
 }
                         task.status = TaskStatus::RUNNING;
-
-                        Logger::log(
-                            "[Worker " +
-                            std::to_string(i) +
-                            "] Task " +
-                            std::to_string(task.id) +
-                            " -> RUNNING"
-                        );
+Logger::log(
+    "[Worker " +
+    std::to_string(i) +
+    "] Task " +
+    std::to_string(task.id) +
+    " (Priority " +
+    std::to_string(task.priority) +
+    ") -> RUNNING"
+);
 
                         std::this_thread::sleep_for(
                             std::chrono::seconds(2)
@@ -70,7 +74,9 @@ public:
                                 std::to_string(i) +
                                 "] Task " +
                                 std::to_string(task.id) +
-                                " -> FAILED"
+                                " (Priority " +
+                                std::to_string(task.priority) +
+                                ") -> FAILED"
                             );
 
                             if (task.retryCount < 3)
@@ -104,7 +110,9 @@ Logger::log(
     std::to_string(i) +
     "] Task " +
     std::to_string(task.id) +
-    " moved to DLQ"
+    " (Priority " +
+    std::to_string(task.priority) +
+    ") moved to DLQ"
 );
                             }
                         }
@@ -117,19 +125,86 @@ Logger::log(
                                 std::to_string(i) +
                                 "] Task " +
                                 std::to_string(task.id) +
-                                " -> SUCCESS"
+                                " (Priority " +
+                                std::to_string(task.priority) +
+                                ") -> SUCCESS"
                             );
                         }
                     }
                 }
             );
         }
-    }
+         schedulerThread_ =
+        std::thread(
+            [this]()
+            {
+                while (!stop_)
+                {
+                    std::this_thread::sleep_for(
+                        std::chrono::seconds(1)
+                    );
+
+                    std::lock_guard<std::mutex>
+                        lock(delayedMutex_);
+
+                    auto now =
+                        std::chrono::steady_clock::now();
+
+                    for (
+                        auto it = delayedTasks_.begin();
+                        it != delayedTasks_.end();
+                    )
+                    {
+                        if (it->executeAt <= now)
+                        {
+                            Logger::log(
+                                "Moving delayed task "
+                                + std::to_string(it->id)
+                                + " to queue"
+                            );
+
+                            taskQueue_.push(*it);
+
+                            it = delayedTasks_.erase(it);
+                        }
+                        else
+                        {
+                            ++it;
+                        }
+                    }
+                }
+            }
+        );
+}
+    
+    
 
     void submit(const Task& task)
     {
         taskQueue_.push(task);
     }
+    void submitDelayed(Task task)
+{
+    task.executeAt =
+        std::chrono::steady_clock::now()
+        +
+        std::chrono::seconds(
+            task.delaySeconds
+        );
+
+    std::lock_guard<std::mutex>
+        lock(delayedMutex_);
+
+    delayedTasks_.push_back(task);
+
+    Logger::log(
+        "Delayed Task "
+        + std::to_string(task.id)
+        + " scheduled after "
+        + std::to_string(task.delaySeconds)
+        + " seconds"
+    );
+}
     void printDeadLetterQueue()
 {
     Logger::log("");
@@ -154,22 +229,29 @@ Logger::log(
 }
 
     ~ThreadPool()
-    {
-      for(size_t i = 0; i < workers_.size(); i++)
 {
-    Task shutdownTask;
+    stop_ = true;
 
-    shutdownTask.shutdown = true;
+    for(size_t i = 0; i < workers_.size(); i++)
+    {
+        Task shutdownTask;
 
-    taskQueue_.push(shutdownTask);
-}
+        shutdownTask.shutdown = true;
 
-        for (auto& worker : workers_)
+        taskQueue_.push(shutdownTask);
+    }
+
+    if(schedulerThread_.joinable())
+    {
+        schedulerThread_.join();
+    }
+
+    for(auto& worker : workers_)
+    {
+        if(worker.joinable())
         {
-            if (worker.joinable())
-            {
-                worker.join();
-            }
+            worker.join();
         }
     }
-};
+}
+};  

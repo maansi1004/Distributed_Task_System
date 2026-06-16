@@ -3,12 +3,17 @@
 #include <queue>
 #include <mutex>
 #include <condition_variable>
-
+#include "task_comparator.hpp"
 template<typename T>
 class ThreadSafeQueue
 {
 private:
-    std::queue<T> queue_;
+    // #include <queue>
+    std::priority_queue<
+    T,
+    std::vector<T>,
+    TaskComparator
+> queue_;
     mutable std::mutex mutex_;
     std::condition_variable cv_;
 
@@ -32,7 +37,8 @@ public:
             return !queue_.empty();
         });
 
-        T value = queue_.front();
+        // T value = queue_.front();
+        T value = queue_.top(); // Use top() for priority queue
 
         queue_.pop();
 

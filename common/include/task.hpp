@@ -1,7 +1,7 @@
 #pragma once
 
 #include <string>
-
+#include <chrono>
 enum class TaskStatus
 {
     PENDING,
@@ -30,12 +30,19 @@ inline std::string statusToString(TaskStatus status)
             return "UNKNOWN";
     }
 }
-
 struct Task
 {
     int id;
     std::string description;
     TaskStatus status;
+
     int retryCount = 0;
+
     bool shutdown = false;
+
+    int priority = 0;
+
+    int delaySeconds = 0;
+
+    std::chrono::steady_clock::time_point executeAt;
 };

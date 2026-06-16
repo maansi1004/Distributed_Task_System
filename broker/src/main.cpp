@@ -3,33 +3,56 @@
 #include <chrono>
 
 #include "../../common/include/task.hpp"
-#include "../../common/include/thread_safe_queue.hpp"
-
 #include "../include/thread_pool.hpp"
 
 int main()
 {
-    ThreadPool pool(4);
+    // Use 1 worker so execution order is easy to verify
+    ThreadPool pool(1);
 
-    for(int i = 1; i <= 20; i++)
+    Task analytics
     {
-        Task task
-        {
-            i,
-            "Sample Task",
-            TaskStatus::PENDING
-        };
+        1,
+        "Analytics",
+        TaskStatus::PENDING,
+        0,      // retryCount
+        false,  // shutdown
+        1  ,     // priority
+        10 //delay
+    };
 
-        pool.submit(task);
-    }
+    Task payment
+    {
+        2,
+        "Payment",
+        TaskStatus::PENDING,
+        0,
+        false,
+        10,
+        0
+    };
 
-  std::this_thread::sleep_for(
-    std::chrono::seconds(30)
-);
+    Task email
+    {
+        3,
+        "Email",
+        TaskStatus::PENDING,
+        0,
+        false,
+        5,
+        5
+    };
 
-pool.printDeadLetterQueue();
+    // Submit in a different order intentionally
+    pool.submitDelayed(analytics);
+    pool.submit(payment);
+    pool.submitDelayed(email);
 
+    std::this_thread::sleep_for(
+        std::chrono::seconds(10)
+    );
 
+    pool.printDeadLetterQueue();
 
     return 0;
 }
