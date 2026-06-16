@@ -1,4 +1,3 @@
-#include <iostream>
 #include <thread>
 #include <chrono>
 
@@ -7,52 +6,20 @@
 
 int main()
 {
-    // Use 1 worker so execution order is easy to verify
     ThreadPool pool(1);
 
-    Task analytics
-    {
-        1,
-        "Analytics",
-        TaskStatus::PENDING,
-        0,      // retryCount
-        false,  // shutdown
-        1  ,     // priority
-        10 //delay
-    };
+    Task task;
 
-    Task payment
-    {
-        2,
-        "Payment",
-        TaskStatus::PENDING,
-        0,
-        false,
-        10,
-        0
-    };
+    task.id = 101;
+    task.description = "Status Test";
+    task.priority = 10;
+    task.status = TaskStatus::PENDING;
 
-    Task email
-    {
-        3,
-        "Email",
-        TaskStatus::PENDING,
-        0,
-        false,
-        5,
-        5
-    };
-
-    // Submit in a different order intentionally
-    pool.submitDelayed(analytics);
-    pool.submit(payment);
-    pool.submitDelayed(email);
+    pool.submit(task);
 
     std::this_thread::sleep_for(
-        std::chrono::seconds(10)
+        std::chrono::seconds(5)
     );
-
-    pool.printDeadLetterQueue();
 
     return 0;
 }

@@ -7,10 +7,11 @@
 #include "../../common/include/task.hpp"
 #include "../../common/include/thread_safe_queue.hpp"
 #include "../../common/include/logger.hpp"
-
+#include "../../database/include/database.hpp"
 class ThreadPool
 {
 private:
+
     std::vector<std::thread> workers_;
 
     ThreadSafeQueue<Task> taskQueue_;
@@ -23,6 +24,7 @@ std::vector<Task> delayedTasks_;
 std::mutex delayedMutex_;
 std::thread schedulerThread_;
     bool stop_;
+    Database db_;
 
 public:
     explicit ThreadPool(size_t numThreads)
@@ -48,6 +50,10 @@ public:
     break;
 }
                         task.status = TaskStatus::RUNNING;
+                        db_.updateTaskStatus(
+    task.id,
+    "RUNNING"
+);
 Logger::log(
     "[Worker " +
     std::to_string(i) +
@@ -68,7 +74,10 @@ Logger::log(
                         if (shouldFail)
                         {
                             task.status = TaskStatus::FAILED;
-
+db_.updateTaskStatus(
+    task.id,
+    "FAILED"
+);
                             Logger::log(
                                 "[Worker " +
                                 std::to_string(i) +
@@ -119,7 +128,10 @@ Logger::log(
                         else
                         {
                             task.status = TaskStatus::SUCCESS;
-
+db_.updateTaskStatus(
+    task.id,
+    "SUCCESS"
+);
                             Logger::log(
                                 "[Worker " +
                                 std::to_string(i) +
@@ -175,14 +187,64 @@ Logger::log(
                 }
             }
         );
+        if(
+    !db_.connect(
+        "host=localhost "
+        "port=5432 "
+        "dbname=task_queue "
+        "user=postgres "
+        "password=maansi123"
+    )
+)
+{
+    Logger::log("Database connection failed");
+}
+else
+{
+    Logger::log(
+        "Database connected"
+    );
+
+    auto pendingTasks =
+        db_.loadPendingTasks();
+
+    for(const auto& task : pendingTasks)
+    {
+        taskQueue_.push(task);
+    }
+
+    Logger::log(
+        "Recovered "
+        + std::to_string(
+            pendingTasks.size()
+        )
+        + " pending tasks"
+    );
+}
 }
     
     
 
-    void submit(const Task& task)
+  void submit(const Task& task)
+{
+    if(db_.insertTask(task))
     {
-        taskQueue_.push(task);
+        Logger::log(
+            "Task "
+            + std::to_string(task.id)
+            + " persisted to database"
+        );
     }
+    else
+    {
+        Logger::log(
+            "Failed to persist task "
+            + std::to_string(task.id)
+        );
+    }
+
+    taskQueue_.push(task);
+}
     void submitDelayed(Task task)
 {
     task.executeAt =
@@ -194,7 +256,7 @@ Logger::log(
 
     std::lock_guard<std::mutex>
         lock(delayedMutex_);
-
+db_.insertTask(task);
     delayedTasks_.push_back(task);
 
     Logger::log(
@@ -228,6 +290,7 @@ Logger::log(
     }
 }
 
+
     ~ThreadPool()
 {
     stop_ = true;
@@ -254,4 +317,6 @@ Logger::log(
         }
     }
 }
+
+
 };  
