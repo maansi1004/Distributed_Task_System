@@ -161,7 +161,7 @@ bool Database::updateTaskStatus(
         "UPDATE tasks "
         "SET status='" +
         status +
-        "' "
+           "', updated_at=NOW() "
         "WHERE id=" +
         std::to_string(taskId) +
         ";";

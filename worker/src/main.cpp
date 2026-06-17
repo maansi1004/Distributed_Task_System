@@ -19,7 +19,7 @@ db.connect(
 while(true)
 {
     std::string taskId =
-        redis.popTask();
+        redis.claimTask();
 
     Task task;
 
@@ -30,12 +30,30 @@ while(true)
         )
     )
     {
+        db.updateTaskStatus(
+            task.id,
+            "RUNNING"
+        );
+
         std::cout
             << "Processing Task "
             << task.id
             << " : "
             << task.description
             << std::endl;
+
+        std::this_thread::sleep_for(
+            std::chrono::seconds(2)
+        );
+
+        db.updateTaskStatus(
+            task.id,
+            "SUCCESS"
+        );
+
+        redis.acknowledgeTask(
+            taskId
+        );
     }
     else
     {

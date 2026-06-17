@@ -2,7 +2,7 @@
 
 #include <sw/redis++/redis++.h>
 #include <string>
-
+#include <vector>
 class RedisClient
 {
 private:
@@ -16,4 +16,17 @@ public:
     );
 
     std::string popTask();
+    std::string claimTask();
+
+void acknowledgeTask(
+    const std::string& taskId
+);
+std::vector<std::string>
+getProcessingTasks();
+
+void requeueTask(
+    const std::string& taskId
+);
+// std::vector<std::string>
+
 };

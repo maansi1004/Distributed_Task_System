@@ -1,5 +1,5 @@
 #include "../include/redis_client.hpp"
-
+#include <iterator>
 RedisClient::RedisClient()
     : redis_(
         "tcp://127.0.0.1:6379"
@@ -31,4 +31,62 @@ std::string RedisClient::popTask()
     }
 
     return "";
+}
+std::string RedisClient::claimTask()
+{
+    auto result =
+        redis_.blmove(
+            "queue:tasks",
+            "queue:processing",
+           sw::redis::ListWhence::LEFT,
+      sw::redis::ListWhence::LEFT,
+            std::chrono::seconds(0)
+        );
+
+    if(result)
+    {
+        return *result;
+    }
+
+    return "";
+}
+void RedisClient::acknowledgeTask(
+    const std::string& taskId
+)
+{
+    redis_.lrem(
+        "queue:processing",
+        1,
+        taskId
+    );
+}
+    std::vector<std::string>
+RedisClient::getProcessingTasks()
+{
+    std::vector<std::string> tasks;
+
+    redis_.lrange(
+        "queue:processing",
+        0,
+        -1,
+        std::back_inserter(tasks)
+    );
+
+    return tasks;
+}
+
+void RedisClient::requeueTask(
+    const std::string& taskId
+)
+{
+    redis_.lrem(
+        "queue:processing",
+        1,
+        taskId
+    );
+
+    redis_.lpush(
+        "queue:tasks",
+        taskId
+    );
 }
