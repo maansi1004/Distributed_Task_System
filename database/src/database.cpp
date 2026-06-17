@@ -268,3 +268,73 @@ bool Database::fetchNextPendingTask(
 
     return true;
 }
+bool Database::fetchTaskById(
+    int taskId,
+    Task& task
+)
+{
+    std::string query =
+        "SELECT "
+        "id, "
+        "description, "
+        "priority, "
+        "retry_count, "
+        "delay_seconds "
+        "FROM tasks "
+        "WHERE id=" +
+        std::to_string(taskId) +
+        ";";
+
+    PGresult* result =
+        PQexec(
+            conn_,
+            query.c_str()
+        );
+
+    if(
+        PQresultStatus(result)
+        != PGRES_TUPLES_OK
+    )
+    {
+        PQclear(result);
+
+        return false;
+    }
+
+    if(PQntuples(result) == 0)
+    {
+        PQclear(result);
+
+        return false;
+    }
+
+    task.id =
+        std::stoi(
+            PQgetvalue(result,0,0)
+        );
+
+    task.description =
+        PQgetvalue(result,0,1);
+
+    task.priority =
+        std::stoi(
+            PQgetvalue(result,0,2)
+        );
+
+    task.retryCount =
+        std::stoi(
+            PQgetvalue(result,0,3)
+        );
+
+    task.delaySeconds =
+        std::stoi(
+            PQgetvalue(result,0,4)
+        );
+
+    task.status =
+        TaskStatus::PENDING;
+
+    PQclear(result);
+
+    return true;
+}

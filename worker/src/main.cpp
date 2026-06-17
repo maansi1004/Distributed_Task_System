@@ -3,8 +3,10 @@
 #include <iostream>
 
 #include "../../database/include/database.hpp"
+#include "../../redis/include/redis_client.hpp"
 int main(){
     Database db;
+    RedisClient redis;
 
 db.connect(
     "host=localhost "
@@ -16,33 +18,30 @@ db.connect(
 
 while(true)
 {
+    std::string taskId =
+        redis.popTask();
+
     Task task;
 
     if(
-        db.fetchNextPendingTask(task)
+        db.fetchTaskById(
+            std::stoi(taskId),
+            task
+        )
     )
     {
         std::cout
             << "Processing Task "
             << task.id
+            << " : "
+            << task.description
             << std::endl;
-
-      
-
-        std::this_thread::sleep_for(
-            std::chrono::seconds(2)
-        );
-
-        db.updateTaskStatus(
-            task.id,
-            "SUCCESS"
-        );
     }
     else
     {
-        std::this_thread::sleep_for(
-            std::chrono::seconds(1)
-        );
+        std::cout
+            << "Task not found"
+            << std::endl;
     }
 }
 }

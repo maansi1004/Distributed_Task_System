@@ -1,8 +1,9 @@
 #include "../../database/include/database.hpp"
-
+#include "../../redis/include/redis_client.hpp"
 int main()
 {
     Database db;
+    RedisClient redis;
 
     db.connect(
         "host=localhost "
@@ -29,6 +30,9 @@ int main()
             TaskStatus::PENDING;
 
         db.insertTask(task);
+        redis.pushTask(
+    std::to_string(task.id)
+);
     }
 
     return 0;

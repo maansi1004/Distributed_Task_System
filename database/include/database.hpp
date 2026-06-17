@@ -27,7 +27,12 @@ bool updateTaskStatus(
     int taskId,
     const std::string& status
 );
+
 bool fetchNextPendingTask(Task& task);
 std::vector<Task> loadPendingTasks();
+bool fetchTaskById(
+    int taskId,
+    Task& task
+);
     ~Database();
 };
