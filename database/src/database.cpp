@@ -1,5 +1,6 @@
 #include "../include/database.hpp"
 #include <vector>
+#include <iostream>
 Database::Database()
     : conn_(nullptr)
 {
@@ -62,7 +63,10 @@ bool Database::insertTask(
         == PGRES_COMMAND_OK;
 
     PQclear(result);
-
+    std::cout
+    << "Insert success = "
+    << success
+    << std::endl;
     return success;
 }
 std::vector<Task> Database::loadPendingTasks()

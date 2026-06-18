@@ -8,8 +8,26 @@ int main(){
     Database db;
     RedisClient redis;
 
+    auto stuckTasks =
+    redis.getProcessingTasks();
+
+std::cout
+    << "[Recovery] Found "
+    << stuckTasks.size()
+    << " stuck tasks"
+    << std::endl;
+
+for(const auto& taskId : stuckTasks)
+{
+    redis.requeueTask(taskId);
+
+    std::cout
+        << "[Recovery] Requeued task "
+        << taskId
+        << std::endl;
+}
 db.connect(
-    "host=localhost "
+    "host=postgres "
     "port=5432 "
     "dbname=task_queue "
     "user=postgres "
@@ -34,13 +52,15 @@ while(true)
             task.id,
             "RUNNING"
         );
-
-        std::cout
-            << "Processing Task "
-            << task.id
-            << " : "
-            << task.description
-            << std::endl;
+std::cout
+    << "[Worker "
+    << std::this_thread::get_id()
+    << "] Processing Task "
+    << task.id
+    << " : "
+    << task.description
+    << std::endl;
+    
 
         std::this_thread::sleep_for(
             std::chrono::seconds(2)

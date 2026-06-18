@@ -2,7 +2,7 @@
 #include <iterator>
 RedisClient::RedisClient()
     : redis_(
-        "tcp://127.0.0.1:6379"
+    "tcp://127.0.0.1:6379"
       )
 {
 }
