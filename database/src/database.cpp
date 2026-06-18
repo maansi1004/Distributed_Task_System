@@ -272,6 +272,54 @@ bool Database::fetchNextPendingTask(
 
     return true;
 }
+std::vector<Task> Database::getAllTasks()
+{
+    std::vector<Task> tasks;
+
+    PGresult* result =
+        PQexec(
+            conn_,
+            "SELECT "
+            "id, "
+            "description, "
+            "status, "
+            "priority, "
+            "retry_count, "
+            "delay_seconds "
+            "FROM tasks;"
+        );
+
+    if(
+        PQresultStatus(result)
+        != PGRES_TUPLES_OK
+    )
+    {
+        PQclear(result);
+        return tasks;
+    }
+
+    int rows =
+        PQntuples(result);
+
+    for(int i = 0; i < rows; i++)
+    {
+        Task task;
+
+        task.id =
+            std::stoi(
+                PQgetvalue(result,i,0)
+            );
+
+        task.description =
+            PQgetvalue(result,i,1);
+
+        tasks.push_back(task);
+    }
+
+    PQclear(result);
+
+    return tasks;
+}
 bool Database::fetchTaskById(
     int taskId,
     Task& task
@@ -341,4 +389,5 @@ bool Database::fetchTaskById(
     PQclear(result);
 
     return true;
+    
 }

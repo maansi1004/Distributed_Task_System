@@ -34,5 +34,6 @@ bool fetchTaskById(
     int taskId,
     Task& task
 );
+std::vector<Task> getAllTasks();
     ~Database();
 };
