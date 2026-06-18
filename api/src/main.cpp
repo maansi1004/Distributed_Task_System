@@ -91,7 +91,80 @@ server.Get(
         );
     }
 );
+server.Get(
+    "/metrics",
+    [&](const httplib::Request& req,
+        httplib::Response& res)
+    {
+        std::string json =
+            "{"
+            "\"pending\":" +
+            std::to_string(
+                db.countTasksByStatus("PENDING")
+            ) +
+            ","
+            "\"running\":" +
+            std::to_string(
+                db.countTasksByStatus("RUNNING")
+            ) +
+            ","
+            "\"success\":" +
+            std::to_string(
+                db.countTasksByStatus("SUCCESS")
+            ) +
+            "}";
 
+        res.set_content(
+            json,
+            "application/json"
+        );
+    }
+);
+server.Get(
+    R"(/tasks/(\d+))",
+    [&](const httplib::Request& req,
+        httplib::Response& res)
+    {
+        int taskId =
+            std::stoi(
+                req.matches[1]
+            );
+
+        Task task;
+
+        if(
+            db.fetchTaskById(
+                taskId,
+                task
+            )
+        )
+        {
+            std::string json =
+                "{"
+                "\"id\":" +
+                std::to_string(task.id)
+                + ","
+                "\"description\":\"" +
+                task.description +
+                "\""
+                "}";
+
+            res.set_content(
+                json,
+                "application/json"
+            );
+        }
+        else
+        {
+            res.status = 404;
+
+            res.set_content(
+                "Task not found",
+                "text/plain"
+            );
+        }
+    }
+);
 server.listen(
     "0.0.0.0",
     8080

@@ -35,5 +35,8 @@ bool fetchTaskById(
     Task& task
 );
 std::vector<Task> getAllTasks();
+int countTasksByStatus(
+    const std::string& status
+);
     ~Database();
 };

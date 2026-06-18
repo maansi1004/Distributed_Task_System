@@ -320,6 +320,41 @@ std::vector<Task> Database::getAllTasks()
 
     return tasks;
 }
+int Database::countTasksByStatus(
+    const std::string& status
+)
+{
+    std::string query =
+        "SELECT COUNT(*) "
+        "FROM tasks "
+        "WHERE status='" +
+        status +
+        "';";
+
+    PGresult* result =
+        PQexec(
+            conn_,
+            query.c_str()
+        );
+
+    if(
+        PQresultStatus(result)
+        != PGRES_TUPLES_OK
+    )
+    {
+        PQclear(result);
+        return 0;
+    }
+
+    int count =
+        std::stoi(
+            PQgetvalue(result,0,0)
+        );
+
+    PQclear(result);
+
+    return count;
+}
 bool Database::fetchTaskById(
     int taskId,
     Task& task
