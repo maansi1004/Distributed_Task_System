@@ -312,7 +312,30 @@ std::vector<Task> Database::getAllTasks()
 
         task.description =
             PQgetvalue(result,i,1);
+std::string status =
+    PQgetvalue(result,i,2);
+    if(status=="PENDING")
+    task.status=TaskStatus::PENDING;
+else if(status=="RUNNING")
+    task.status=TaskStatus::RUNNING;
+else if(status=="SUCCESS")
+    task.status=TaskStatus::SUCCESS;
+else
+    task.status=TaskStatus::FAILED;
+    task.priority =
+    std::stoi(
+        PQgetvalue(result,i,3)
+    );
 
+task.retryCount =
+    std::stoi(
+        PQgetvalue(result,i,4)
+    );
+
+task.delaySeconds =
+    std::stoi(
+        PQgetvalue(result,i,5)
+    );
         tasks.push_back(task);
     }
 
@@ -355,6 +378,40 @@ int Database::countTasksByStatus(
 
     return count;
 }
+bool Database::deleteTask(
+    int taskId
+)
+{
+    std::string query =
+        "DELETE FROM tasks "
+        "WHERE id=" +
+        std::to_string(taskId) +
+        " AND status='PENDING';";
+
+    PGresult* result =
+        PQexec(
+            conn_,
+            query.c_str()
+        );
+
+    if(
+        PQresultStatus(result)
+        != PGRES_COMMAND_OK
+    )
+    {
+        PQclear(result);
+        return false;
+    }
+
+    bool deleted =
+        std::stoi(
+            PQcmdTuples(result)
+        ) > 0;
+
+    PQclear(result);
+
+    return deleted;
+}
 bool Database::fetchTaskById(
     int taskId,
     Task& task
@@ -363,6 +420,7 @@ bool Database::fetchTaskById(
     std::string query =
         "SELECT "
         "id, "
+        "status, "
         "description, "
         "priority, "
         "retry_count, "
@@ -402,20 +460,35 @@ bool Database::fetchTaskById(
 
     task.description =
         PQgetvalue(result,0,1);
+        std::string status =
+    PQgetvalue(result,0,2);
+
+    if(status == "PENDING")
+    {
+        task.status = TaskStatus::PENDING;
+    }
+    else if(status == "RUNNING")
+    {
+        task.status = TaskStatus::RUNNING;
+    }
+    else
+    {
+        task.status = TaskStatus::FAILED;
+    }
 
     task.priority =
-        std::stoi(
-            PQgetvalue(result,0,2)
-        );
-
-    task.retryCount =
         std::stoi(
             PQgetvalue(result,0,3)
         );
 
-    task.delaySeconds =
+    task.retryCount =
         std::stoi(
             PQgetvalue(result,0,4)
+        );
+
+    task.delaySeconds =
+        std::stoi(
+            PQgetvalue(result,0,5)
         );
 
     task.status =

@@ -55,10 +55,16 @@ server.Post(
             std::to_string(task.id)
         );
 
-        res.set_content(
-            "Task Created",
-            "text/plain"
-        );
+     std::string json =
+    "{"
+    "\"id\":" +
+    std::to_string(task.id)
+    + "}";
+
+res.set_content(
+    json,
+    "application/json"
+);
     }
 );
 
@@ -74,45 +80,121 @@ server.Get(
         auto tasks =
             db.getAllTasks();
 
-        std::string output;
+        std::string json = "[";
 
-        for(const auto& task : tasks)
+        for(size_t i=0;
+            i<tasks.size();
+            i++)
         {
-            output +=
-                std::to_string(task.id)
-                + " : "
-                + task.description
-                + "\n";
+            std::string status;
+
+            switch(tasks[i].status)
+            {
+            case TaskStatus::PENDING:
+                status="PENDING";
+                break;
+
+            case TaskStatus::RUNNING:
+                status="RUNNING";
+                break;
+
+            case TaskStatus::SUCCESS:
+                status="SUCCESS";
+                break;
+
+            default:
+                status="FAILED";
+            }
+
+            json +=
+                "{"
+                "\"id\":" +
+                std::to_string(
+                    tasks[i].id
+                )
+                + ","
+                "\"description\":\"" +
+                tasks[i].description +
+                "\","
+                "\"status\":\"" +
+                status +
+                "\","
+                "\"priority\":" +
+                std::to_string(
+                    tasks[i].priority)
+                  + ","
+    "\"retry_count\":" +
+    std::to_string(tasks[i].retryCount)
+    + ","
+    "\"delay_seconds\":" +
+    std::to_string(tasks[i].delaySeconds)
+    + "}";
+             
+
+            if(i != tasks.size()-1)
+            {
+                json += ",";
+            }
         }
 
+        json += "]";
+
         res.set_content(
-            output,
-            "text/plain"
+            json,
+            "application/json"
         );
     }
 );
+
 server.Get(
     "/metrics",
     [&](const httplib::Request& req,
         httplib::Response& res)
     {
         std::string json =
-            "{"
-            "\"pending\":" +
-            std::to_string(
-                db.countTasksByStatus("PENDING")
-            ) +
-            ","
-            "\"running\":" +
-            std::to_string(
-                db.countTasksByStatus("RUNNING")
-            ) +
-            ","
-            "\"success\":" +
-            std::to_string(
-                db.countTasksByStatus("SUCCESS")
-            ) +
-            "}";
+    "{"
+    "\"queue_depth\":" +
+    std::to_string(
+        redis.getQueueDepth()
+    ) +
+    ","
+    "\"processing_depth\":" +
+    std::to_string(
+        redis.getProcessingDepth()
+    ) +
+    ","
+    "\"pending\":" +
+    std::to_string(
+        db.countTasksByStatus(
+            "PENDING"
+        )
+    ) +
+    ","
+    "\"running\":" +
+    std::to_string(
+        db.countTasksByStatus(
+            "RUNNING"
+        )
+    ) +
+    ","
+    "\"success\":" +
+    std::to_string(
+        db.countTasksByStatus(
+            "SUCCESS"
+        )
+    ) +
+    ","
+    "\"failed\":" +
+    std::to_string(
+        db.countTasksByStatus(
+            "FAILED"
+        )
+    ) + ","
+    "\"dlq_depth\":" +
+std::to_string(
+    redis.getDLQDepth()
+)+
+    "}";
 
         res.set_content(
             json,
@@ -139,29 +221,99 @@ server.Get(
             )
         )
         {
-            std::string json =
-                "{"
-                "\"id\":" +
-                std::to_string(task.id)
-                + ","
-                "\"description\":\"" +
-                task.description +
-                "\""
-                "}";
+      std::string status;
 
-            res.set_content(
-                json,
-                "application/json"
+switch(task.status)
+{
+case TaskStatus::PENDING:
+    status = "PENDING";
+    break;
+
+case TaskStatus::RUNNING:
+    status = "RUNNING";
+    break;
+
+case TaskStatus::SUCCESS:
+    status = "SUCCESS";
+    break;
+
+default:
+    status = "FAILED";
+}
+
+std::string json =
+    "{"
+    "\"id\":" +
+    std::to_string(task.id)
+    + ","
+    "\"description\":\"" +
+    task.description +
+    "\","
+    "\"status\":\"" +
+    status +
+    "\","
+    "\"priority\":" +
+    std::to_string(task.priority)
+    + ","
+    "\"retry_count\":" +
+    std::to_string(task.retryCount)
+    + ","
+    "\"delay_seconds\":" +
+    std::to_string(task.delaySeconds)
+    + "}";
+
+res.set_content(
+    json,
+    "application/json"
+);
+    }
+    else
+{
+    res.status = 404;
+
+    res.set_content(
+        "Task not found",
+        "text/plain"
+    );
+}
+}
+);
+server.Delete(
+    R"(/tasks/(\d+))",
+    [&](const httplib::Request& req,
+        httplib::Response& res)
+    {
+        int taskId =
+            std::stoi(
+                req.matches[1]
             );
+
+        if(
+            db.deleteTask(taskId)
+        )
+        {
+        std::string json =
+    "{"
+    "\"id\":" +
+    std::to_string(taskId)
+    + ","
+    "\"deleted\":true"
+    "}";
+
+res.set_content(
+    json,
+    "application/json"
+);
         }
         else
         {
             res.status = 404;
 
-            res.set_content(
-                "Task not found",
-                "text/plain"
-            );
+         
+res.set_content(
+    "{\"deleted\":false}",
+    "application/json"
+);
         }
     }
 );

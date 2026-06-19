@@ -38,5 +38,8 @@ std::vector<Task> getAllTasks();
 int countTasksByStatus(
     const std::string& status
 );
+bool deleteTask(
+    int taskId
+);
     ~Database();
 };

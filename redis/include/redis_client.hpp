@@ -27,6 +27,10 @@ getProcessingTasks();
 void requeueTask(
     const std::string& taskId
 );
+long long getQueueDepth();
+
+long long getProcessingDepth();
+long long getDLQDepth();
 // std::vector<std::string>
 
 };

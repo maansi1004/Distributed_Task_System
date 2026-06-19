@@ -74,7 +74,18 @@ RedisClient::getProcessingTasks()
 
     return tasks;
 }
-
+long long RedisClient::getQueueDepth()
+{
+    return redis_.llen(
+        "queue:tasks"
+    );
+}
+long long RedisClient::getProcessingDepth()
+{
+    return redis_.llen(
+        "queue:processing"
+    );
+}
 void RedisClient::requeueTask(
     const std::string& taskId
 )
@@ -88,5 +99,11 @@ void RedisClient::requeueTask(
     redis_.lpush(
         "queue:tasks",
         taskId
+    );
+}
+long long RedisClient::getDLQDepth()
+{
+    return redis_.llen(
+        "queue:dlq"
     );
 }
