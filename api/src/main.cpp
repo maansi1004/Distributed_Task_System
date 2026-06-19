@@ -15,7 +15,14 @@ db.connect(
     "password=maansi123"
 );
     httplib::Server server;
-
+server.set_default_headers(
+{
+    {"Access-Control-Allow-Origin", "*"},
+    {"Access-Control-Allow-Methods",
+     "GET, POST, DELETE, OPTIONS"},
+    {"Access-Control-Allow-Headers",
+     "Content-Type"}
+});
     server.Get(
         "/",
         [](const httplib::Request& req,
