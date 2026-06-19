@@ -50,24 +50,36 @@ Tasks are stored persistently in PostgreSQL, queued through Redis, processed by 
 
 ## System Architecture
 
-Client / Dashboard
-|
-v
-REST API
-|
-+------------------+
-|                  |
-v                  v
-PostgreSQL            Redis Queue
-(Task Metadata)      (Task Scheduling)
-|                  |
-+--------+---------+
-|
-v
-Worker Pool
-(Multiple Workers)
+```text
+                    +------------------+
+                    |  React Dashboard |
+                    +---------+--------+
+                              |
+                              v
+                    +------------------+
+                    |     REST API     |
+                    +---------+--------+
+                              |
+         +--------------------+--------------------+
+         |                                         |
+         v                                         v
 
----
+   +-------------+                     +------------------+
+   | PostgreSQL  |                     |      Redis       |
+   | Task State  |                     |   Task Queue     |
+   +------+------+                     +--------+---------+
+          ^                                     |
+          |                                     |
+          +----------------+--------------------+
+                           |
+                           v
+
+                +-------------------------+
+                |      Worker Pool        |
+                | Worker-1  Worker-2      |
+                | Worker-3  Worker-N      |
+                +-------------------------+
+```
 
 ## Task Flow
 
