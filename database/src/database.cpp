@@ -38,8 +38,8 @@ bool Database::insertTask(
 )
 {
     std::string query =
-       "INSERT INTO tasks "
-"(id, description, status, priority, retry_count, delay_seconds) "
+        "INSERT INTO tasks "
+        "(id, description, status, priority, retry_count, delay_seconds) "
         "VALUES (" +
         std::to_string(task.id) +
         ", '" +
@@ -62,11 +62,21 @@ bool Database::insertTask(
         PQresultStatus(result)
         == PGRES_COMMAND_OK;
 
-    PQclear(result);
     std::cout
-    << "Insert success = "
-    << success
-    << std::endl;
+        << "Insert success = "
+        << success
+        << std::endl;
+
+    if(!success)
+    {
+        std::cout
+            << "DB Error = "
+            << PQresultErrorMessage(result)
+            << std::endl;
+    }
+
+    PQclear(result);
+
     return success;
 }
 std::vector<Task> Database::loadPendingTasks()
@@ -247,12 +257,8 @@ bool Database::fetchNextPendingTask(
             PQgetvalue(result,0,4)
         );
 
-    task.status =
-        TaskStatus::PENDING;
-
-   task.status =
-    TaskStatus::PENDING;
-
+  task.status =
+    TaskStatus::RUNNING;
 // std::string updateQuery =
 //     "UPDATE tasks "
 //     "SET status='RUNNING' "
@@ -268,7 +274,7 @@ bool Database::fetchNextPendingTask(
 
 // PQclear(updateResult);
 
-
+PQclear(result);
 
     return true;
 }
@@ -288,19 +294,31 @@ std::vector<Task> Database::getAllTasks()
             "delay_seconds "
             "FROM tasks;"
         );
+if(
+    PQresultStatus(result)
+    != PGRES_TUPLES_OK
+)
+{
+    std::cout
+        << "Query Failed: "
+        << PQerrorMessage(conn_)
+        << std::endl;
 
-    if(
-        PQresultStatus(result)
-        != PGRES_TUPLES_OK
-    )
-    {
-        PQclear(result);
-        return tasks;
-    }
+    PQclear(result);
+
+    return tasks;
+}
 
     int rows =
         PQntuples(result);
-
+std::cout 
+<<"Rows = "
+<<PQntuples(result)
+<<std::endl;
+std::cout 
+<<"Cols = "
+<<PQnfields(result)
+<<std::endl;
     for(int i = 0; i < rows; i++)
     {
         Task task;
@@ -412,6 +430,7 @@ bool Database::deleteTask(
 
     return deleted;
 }
+
 bool Database::fetchTaskById(
     int taskId,
     Task& task
@@ -420,8 +439,8 @@ bool Database::fetchTaskById(
     std::string query =
         "SELECT "
         "id, "
-        "status, "
         "description, "
+        "status, "
         "priority, "
         "retry_count, "
         "delay_seconds "
@@ -436,20 +455,38 @@ bool Database::fetchTaskById(
             query.c_str()
         );
 
+    std::cout
+        << "Status = "
+        << PQresultStatus(result)
+        << std::endl;
+
+    std::cout
+        << "Rows = "
+        << PQntuples(result)
+        << std::endl;
+
+    std::cout
+        << "Cols = "
+        << PQnfields(result)
+        << std::endl;
+
+    std::cout
+        << "Error = "
+        << PQresultErrorMessage(result)
+        << std::endl;
+
     if(
         PQresultStatus(result)
         != PGRES_TUPLES_OK
     )
     {
         PQclear(result);
-
         return false;
     }
 
     if(PQntuples(result) == 0)
     {
         PQclear(result);
-
         return false;
     }
 
@@ -460,20 +497,29 @@ bool Database::fetchTaskById(
 
     task.description =
         PQgetvalue(result,0,1);
-        std::string status =
-    PQgetvalue(result,0,2);
+
+    std::string status =
+        PQgetvalue(result,0,2);
 
     if(status == "PENDING")
     {
-        task.status = TaskStatus::PENDING;
+        task.status =
+            TaskStatus::PENDING;
     }
     else if(status == "RUNNING")
     {
-        task.status = TaskStatus::RUNNING;
+        task.status =
+            TaskStatus::RUNNING;
+    }
+    else if(status == "SUCCESS")
+    {
+        task.status =
+            TaskStatus::SUCCESS;
     }
     else
     {
-        task.status = TaskStatus::FAILED;
+        task.status =
+            TaskStatus::FAILED;
     }
 
     task.priority =
@@ -491,11 +537,7 @@ bool Database::fetchTaskById(
             PQgetvalue(result,0,5)
         );
 
-    task.status =
-        TaskStatus::PENDING;
-
     PQclear(result);
 
     return true;
-    
 }

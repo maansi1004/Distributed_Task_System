@@ -2,18 +2,20 @@
 #include <iostream>
 #include "../../database/include/database.hpp"
 #include "../../redis/include/redis_client.hpp"
+#include <ctime>
+#include<mutex>
+
 int main()
 {
     Database db;
 RedisClient redis;
+    std::mutex dbMutex;   
+const char* connStr = std::getenv("DB_CONN");
+std::string dbConn = connStr 
+    ? connStr 
+    : "host=localhost port=5432 dbname=task_queue user=postgres password=maansi123";
 
-db.connect(
-    "host=localhost "
-    "port=5432 "
-    "dbname=task_queue "
-    "user=postgres "
-    "password=maansi123"
-);
+db.connect(dbConn);
     httplib::Server server;
 server.set_default_headers(
 {
@@ -23,6 +25,14 @@ server.set_default_headers(
     {"Access-Control-Allow-Headers",
      "Content-Type"}
 });
+server.Options(
+    R"(.*)",
+    [](const httplib::Request&,
+       httplib::Response& res)
+    {
+        res.status = 200;
+    }
+);
     server.Get(
         "/",
         [](const httplib::Request& req,
@@ -34,15 +44,19 @@ server.set_default_headers(
             );
         }
     );
+    srand(time(nullptr));
 server.Post(
     "/tasks",
     [&](const httplib::Request& req,
         httplib::Response& res)
     {
+            std::lock_guard<std::mutex> lock(dbMutex);
         Task task;
 
-        task.id =
-            rand() % 100000;
+      task.id =
+    static_cast<int>(
+        std::time(nullptr)
+    );
 
         task.description =
             "API Task";
@@ -55,13 +69,33 @@ server.Post(
 
         task.status =
             TaskStatus::PENDING;
+bool inserted =
+    db.insertTask(task);
 
-        db.insertTask(task);
+if(!inserted)
+{
+    res.status = 500;
 
-        redis.pushTask(
-            std::to_string(task.id)
-        );
+    res.set_content(
+        "DB Insert Failed",
+        "text/plain"
+    );
 
+    return;
+}
+
+std::cout
+    << "Pushing task "
+    << task.id
+    << " to Redis"
+    << std::endl;
+
+redis.pushTask(
+    std::to_string(task.id)
+);
+std::cout
+    << "Push complete"
+    << std::endl;
      std::string json =
     "{"
     "\"id\":" +
@@ -84,6 +118,7 @@ server.Get(
     [&](const httplib::Request& req,
         httplib::Response& res)
     {
+            std::lock_guard<std::mutex> lock(dbMutex);
         auto tasks =
             db.getAllTasks();
 
@@ -158,6 +193,7 @@ server.Get(
     [&](const httplib::Request& req,
         httplib::Response& res)
     {
+                std::lock_guard<std::mutex> lock(dbMutex);
         std::string json =
     "{"
     "\"queue_depth\":" +
@@ -214,6 +250,7 @@ server.Get(
     [&](const httplib::Request& req,
         httplib::Response& res)
     {
+            std::lock_guard<std::mutex> lock(dbMutex);
         int taskId =
             std::stoi(
                 req.matches[1]
@@ -290,6 +327,7 @@ server.Delete(
     [&](const httplib::Request& req,
         httplib::Response& res)
     {
+            std::lock_guard<std::mutex> lock(dbMutex);
         int taskId =
             std::stoi(
                 req.matches[1]
@@ -314,6 +352,7 @@ res.set_content(
         }
         else
         {
+            std::lock_guard<std::mutex> lock(dbMutex);
             res.status = 404;
 
          
