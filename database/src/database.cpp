@@ -171,6 +171,7 @@ std::vector<Task> Database::loadPendingTasks()
 
     return tasks;
 }
+
 bool Database::updateTaskStatus(
     int taskId,
     const std::string& status

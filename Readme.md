@@ -1,238 +1,284 @@
 # Distributed Task Queue
 
-A distributed task processing system built in C++ using Redis, PostgreSQL, Docker, and a REST API. The system supports concurrent worker execution, atomic task claiming, crash recovery, task monitoring, and real-time dashboard visualization.
+A distributed task queue system built in C++ with Redis-backed atomic task claiming, PostgreSQL persistence, horizontal worker scaling via Docker Compose, and a React dashboard for live monitoring.
 
 ---
 
-## Overview
+## Demo
 
-This project simulates the architecture used by modern background job systems such as Celery, Sidekiq, RabbitMQ-based workers, and cloud task processing platforms.
+> 3 workers competing for tasks in real time — no duplicate processing
 
-Tasks are stored persistently in PostgreSQL, queued through Redis, processed by multiple worker instances, and monitored through REST APIs and a React dashboard.
+![dashboard](docs/dashboard.png)
+
+---
+
+## Architecture
+
+```
+                    ┌─────────────────┐
+                    │   React Dashboard│
+                    │   (port 3000)    │
+                    └────────┬────────┘
+                             │ HTTP
+                    ┌────────▼────────┐
+                    │   API Server    │
+                    │  (cpp-httplib)  │
+                    │   port 8080     │
+                    └────┬──────┬─────┘
+                         │      │
+              INSERT   ──┘      └──  RPUSH task_id
+                         │      │
+               ┌─────────▼──┐  ┌▼──────────────┐
+               │ PostgreSQL │  │     Redis      │
+               │ (source of │  │  queue:tasks   │
+               │   truth)   │  │queue:processing│
+               └─────────┬──┘  └──────┬─────────┘
+                         │            │
+                  SELECT │     BLMOVE │ (atomic claim)
+                         │            │
+               ┌─────────▼────────────▼─────────┐
+               │         Worker Pool             │
+               │  worker-1  worker-2  worker-3   │
+               │     (3 replicas via Docker)     │
+               └─────────────────────────────────┘
+```
+
+**Design decisions:**
+
+- **Redis + PostgreSQL together** — Redis handles fast queue operations (blocking pop, atomic move). PostgreSQL is the durable source of truth. Even if Redis restarts, tasks are recoverable from PostgreSQL.
+- **BLMOVE over BLPOP** — `BLMOVE queue:tasks queue:processing` is atomic. It moves the task ID in one operation with no window for two workers to claim the same task. BLPOP would pop the task and lose it on a crash.
+- **Task IDs in Redis, full data in PostgreSQL** — Redis stores only IDs (lightweight). Workers fetch full task data from PostgreSQL after claiming. This keeps Redis lean and PostgreSQL as the single source of truth.
+- **Separate producer/worker executables** — Decoupled by design. Producers and workers scale independently. Adding 10 producers or 10 workers requires no code changes.
 
 ---
 
 ## Features
 
-### Task Management
-
-* Create tasks through REST API
-* Persist tasks in PostgreSQL
-* Track task lifecycle:
-
-  * PENDING
-  * RUNNING
-  * SUCCESS
-  * FAILED
-
-### Distributed Processing
-
-* Multiple worker instances process tasks concurrently
-* Atomic task claiming using Redis BLMOVE
-* No duplicate task execution
-
-### Reliability
-
-* Processing queue for in-flight tasks
-* Task acknowledgement mechanism
-* Crash recovery for abandoned tasks
-* Dead Letter Queue (DLQ) metrics support
-
-### Monitoring
-
-* REST API endpoints
-* Queue depth monitoring
-* Processing queue monitoring
-* Task status tracking
-* Real-time React dashboard
-
----
-
-## System Architecture
-
-```text
-                    +------------------+
-                    |  React Dashboard |
-                    +---------+--------+
-                              |
-                              v
-                    +------------------+
-                    |     REST API     |
-                    +---------+--------+
-                              |
-         +--------------------+--------------------+
-         |                                         |
-         v                                         v
-
-   +-------------+                     +------------------+
-   | PostgreSQL  |                     |      Redis       |
-   | Task State  |                     |   Task Queue     |
-   +------+------+                     +--------+---------+
-          ^                                     |
-          |                                     |
-          +----------------+--------------------+
-                           |
-                           v
-
-                +-------------------------+
-                |      Worker Pool        |
-                | Worker-1  Worker-2      |
-                | Worker-3  Worker-N      |
-                +-------------------------+
-```
-
-## Task Flow
-
-1. Client sends POST /tasks
-2. API creates a task record in PostgreSQL
-3. Task ID is pushed to Redis queue
-4. Worker atomically claims task using BLMOVE
-5. Task status changes:
-   PENDING → RUNNING → SUCCESS
-6. Worker acknowledges task completion
-7. Dashboard reflects updated metrics
+| Feature | Implementation |
+|---|---|
+| Atomic task claiming | Redis `BLMOVE` — no duplicate processing across workers |
+| Crash recovery | On startup, workers scan `queue:processing` and requeue stale tasks |
+| Priority scheduling | `std::priority_queue` with custom comparator — higher priority tasks run first |
+| Delayed execution | Scheduler thread holds tasks until `executeAt` time, then enqueues |
+| Automatic retries | Failed tasks retry up to 3 times before moving to Dead Letter Queue |
+| Dead Letter Queue | Exhausted tasks stored separately for inspection |
+| Persistence | All task state written to PostgreSQL — survives restarts |
+| Horizontal scaling | Stateless workers — scale with `--scale worker=N`, zero code changes |
+| Thread safety | Mutex-protected queue, logger, and DB access throughout |
+| REST API | 5 endpoints via `cpp-httplib` (header-only) |
+| Live dashboard | React + Recharts polling `/metrics` every 3 seconds |
 
 ---
 
 ## Tech Stack
 
-### Backend
-
-* C++17
-* cpp-httplib
-* PostgreSQL 18
-* libpq
-* Redis 7
-* redis-plus-plus
-
-### Infrastructure
-
-* Docker
-* Docker Compose
-
-### Frontend
-
-* React
-* Vite
+| Layer | Technology |
+|---|---|
+| Task engine | C++17 |
+| Queue | Redis 7 (BLMOVE, LRANGE, LREM) |
+| Persistence | PostgreSQL 17 (libpq) |
+| Redis client | redis-plus-plus + hiredis |
+| REST API | cpp-httplib (header-only) |
+| Containerization | Docker + Docker Compose |
+| Frontend | React 18 + Vite + Recharts |
 
 ---
 
-## API Endpoints
+## Getting Started
 
-### Create Task
+**Prerequisites:** Docker Desktop, Node.js (for frontend only)
 
-POST /tasks
+### 1. Clone and start the backend
 
-Creates a new task and pushes it to the Redis queue.
+```bash
+git clone https://github.com/maansiii/distributed-task-queue
+cd distributed-task-queue
 
----
+docker compose up --build --scale worker=3
+```
 
-### Get All Tasks
+This starts PostgreSQL, Redis, 3 worker replicas, and the API server.
 
-GET /tasks
+### 2. Start the dashboard
 
-Returns all tasks and their metadata.
-
----
-
-### Get Task Details
-
-GET /tasks/{id}
-
-Returns details of a specific task.
-
----
-
-### Delete Task
-
-DELETE /tasks/{id}
-
-Deletes a task if it is still pending.
-
----
-
-### Metrics
-
-GET /metrics
-
-Returns:
-
-* Queue Depth
-* Processing Depth
-* Pending Tasks
-* Running Tasks
-* Successful Tasks
-* Failed Tasks
-* DLQ Depth
-
----
-
-## Running the Project
-
-### Start Infrastructure
-
-docker compose up -d
-
-### Start API
-
-./api.exe
-
-### Start Dashboard
-
-cd dashboard
-
+```bash
+cd frontend
 npm install
-
 npm run dev
+```
 
-Dashboard:
+Open [http://localhost:3000](http://localhost:3000)
 
-http://localhost:5173
+### 3. Submit tasks
 
-API:
+```bash
+# single task
+curl -X POST http://localhost:8080/tasks \
+  -H "Content-Type: application/json" \
+  -d '{"description": "send email", "priority": 5}'
 
-http://localhost:8080
+# burst of 20 tasks to see workers compete
+for i in {1..20}; do
+  curl -X POST http://localhost:8080/tasks \
+    -H "Content-Type: application/json" \
+    -d "{\"description\": \"task $i\", \"priority\": $((RANDOM % 10))}"
+done
+```
 
 ---
 
-## Example Metrics Response
+## REST API
 
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/tasks` | Submit a new task |
+| `GET` | `/tasks` | List all tasks with status |
+| `GET` | `/tasks/:id` | Get single task by ID |
+| `DELETE` | `/tasks/:id` | Cancel a pending task |
+| `GET` | `/metrics` | Live queue stats |
+
+### POST /tasks
+
+```json
+// request
+{ "description": "send email", "priority": 5 }
+
+// response
+{ "id": 1749123456, "description": "send email", "status": "pending" }
+```
+
+### GET /metrics
+
+```json
 {
-"queue_depth": 0,
-"processing_depth": 0,
-"pending": 0,
-"running": 0,
-"success": 25,
-"failed": 1,
-"dlq_depth": 0
+  "pending": 4,
+  "running": 3,
+  "success": 127,
+  "failed": 0,
+  "queue_depth": 4,
+  "processing_depth": 3,
+  "dlq_depth": 0
 }
+```
 
 ---
 
-## Key Concepts Implemented
+## How It Works
 
-* Distributed task processing
-* Worker pools
-* Redis queues
-* Atomic task claiming
-* Crash recovery
-* Task acknowledgement
-* REST API development
-* Dockerized services
-* Real-time monitoring
+### Task Lifecycle
+
+```
+submit via API
+      │
+      ▼
+INSERT into PostgreSQL (status = PENDING)
+      │
+      ▼
+RPUSH task_id → queue:tasks (Redis)
+      │
+      ▼
+Worker: BLMOVE queue:tasks → queue:processing   ← atomic claim
+      │
+      ▼
+Worker: SELECT full task from PostgreSQL
+      │
+      ▼
+UPDATE status = RUNNING
+      │
+      ├── success → UPDATE status = SUCCESS
+      │             LREM queue:processing       ← acknowledge
+      │
+      └── failure → retry up to 3x
+                    if exhausted → Dead Letter Queue
+```
+
+### Atomic Claiming (no duplicate processing)
+
+```
+Worker 1: BLMOVE queue:tasks queue:processing  ← claims task A atomically
+Worker 2: BLMOVE queue:tasks queue:processing  ← blocks, gets task B
+Worker 3: BLMOVE queue:tasks queue:processing  ← blocks, gets task C
+```
+
+`BLMOVE` is a single atomic Redis operation. There is no window where two workers can observe the same task. This is equivalent to `SELECT ... FOR UPDATE SKIP LOCKED` in PostgreSQL but without a transaction.
+
+### Crash Recovery
+
+```
+Worker crashes mid-task
+      │
+      ▼
+task_id remains in queue:processing (never acknowledged)
+      │
+      ▼
+Worker restarts
+      │
+      ▼
+LRANGE queue:processing 0 -1   ← scan for stuck tasks
+      │
+      ▼
+LREM + RPUSH → back to queue:tasks
+UPDATE status = PENDING
+      │
+      ▼
+task is reprocessed
+```
 
 ---
 
-## Future Improvements
+## Project Structure
 
-* Task retries with exponential backoff
-* Worker heartbeat system
-* Priority queues
-* Authentication and authorization
-* WebSocket-based live updates
-* Kubernetes deployment
+```
+distributed-task-queue/
+├── docker-compose.yml
+├── producer/
+│   ├── src/main.cpp
+│   └── Dockerfile
+├── worker/
+│   ├── src/main.cpp
+│   └── Dockerfile
+├── api/
+│   ├── src/main.cpp
+│   ├── include/httplib.h
+│   └── Dockerfile
+├── database/
+│   ├── src/database.cpp
+│   └── include/database.hpp
+├── redis/
+│   ├── src/redis_client.cpp
+│   └── include/redis_client.hpp
+└── frontend/
+    ├── src/
+    │   ├── App.jsx
+    │   └── main.jsx
+    ├── package.json
+    └── vite.config.js
+```
 
 ---
 
+## Key Concepts Demonstrated
 
+**Producer-Consumer Pattern** — Producer and worker are fully decoupled executables. They communicate only through Redis + PostgreSQL. Either side scales independently.
+
+**Concurrency** — Two layers: thread pool within each worker process, and multiple worker processes competing for tasks via Redis.
+
+**Atomicity** — `BLMOVE` is atomic at the Redis level. PostgreSQL transactions ensure task inserts are all-or-nothing.
+
+**Durability** — PostgreSQL is the source of truth. Redis stores only task IDs. If Redis is flushed, tasks are recoverable by reloading PENDING/RUNNING tasks from PostgreSQL.
+
+**Crash Recovery** — `queue:processing` acts as an in-flight registry. Tasks are only removed from it after explicit acknowledgement. Unacknowledged tasks are requeued on worker startup.
+
+**Horizontal Scaling** — Workers are completely stateless. All state lives in Redis and PostgreSQL. `docker compose up --scale worker=10` is all that's needed to scale.
+
+---
+
+## Known Limitations / Future Work
+
+- PostgreSQL is a single node — under very high write load, status updates become a bottleneck. Would address with PgBouncer connection pooling or a write-optimized store.
+- No authentication on the REST API.
+- Worker count is static at startup — dynamic autoscaling based on queue depth would be a natural next step.
+- Observability could be extended with a Prometheus `/metrics` endpoint and Grafana dashboard.
+
+---
 

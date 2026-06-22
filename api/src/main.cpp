@@ -4,6 +4,7 @@
 #include "../../redis/include/redis_client.hpp"
 #include <ctime>
 #include<mutex>
+#include "../include/json.hpp"
 
 int main()
 {
@@ -58,8 +59,6 @@ server.Post(
         std::time(nullptr)
     );
 
-        task.description =
-            "API Task";
 
         task.priority = 1;
 
@@ -69,6 +68,14 @@ server.Post(
 
         task.status =
             TaskStatus::PENDING;
+              try {
+            auto body = nlohmann::json::parse(req.body);
+            task.description = body.value("description", "API Task");
+            task.priority    = body.value("priority", 1);
+        } catch(...) {
+            task.description = "API Task";
+            task.priority = 1;
+        }
 bool inserted =
     db.insertTask(task);
 
@@ -90,22 +97,17 @@ std::cout
     << " to Redis"
     << std::endl;
 
-redis.pushTask(
-    std::to_string(task.id)
-);
-std::cout
-    << "Push complete"
-    << std::endl;
-     std::string json =
-    "{"
-    "\"id\":" +
-    std::to_string(task.id)
-    + "}";
 
-res.set_content(
-    json,
-    "application/json"
-);
+        redis.pushTask(std::to_string(task.id));
+
+        std::string json =
+            "{\"id\":" + std::to_string(task.id) +
+            ",\"description\":\"" + task.description +
+            "\",\"status\":\"pending\"}";
+
+        res.set_content(json, "application/json");
+
+
     }
 );
 

@@ -118,4 +118,19 @@ while(true)
             << std::endl;
     }
 }
+// after existing recovery
+auto pendingTasks = db.loadPendingTasks();
+for (const auto& task : pendingTasks) {
+    std::string taskId = std::to_string(task.id);
+    // check if already in queue:tasks or queue:processing
+    auto processing = redis.getProcessingTasks();
+    bool alreadyQueued = std::find(
+        processing.begin(), processing.end(), taskId
+    ) != processing.end();
+    
+    if (!alreadyQueued) {
+        redis.pushTask(taskId);
+        std::cout << "[Recovery] Requeued orphaned task " << taskId << std::endl;
+    }
+}
 }
