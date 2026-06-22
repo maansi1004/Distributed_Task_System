@@ -33,10 +33,15 @@ Database::~Database()
 {
     disconnect();
 }
+
 bool Database::insertTask(
     const Task& task
 )
 {
+    // at top of every db function
+if (PQstatus(conn_) != CONNECTION_OK) {
+    PQreset(conn_);
+}
     std::string query =
         "INSERT INTO tasks "
         "(id, description, status, priority, retry_count, delay_seconds) "
@@ -170,7 +175,10 @@ bool Database::updateTaskStatus(
     int taskId,
     const std::string& status
 )
-{
+{// at top of every db function
+if (PQstatus(conn_) != CONNECTION_OK) {
+    PQreset(conn_);
+}
     std::string query =
         "UPDATE tasks "
         "SET status='" +
@@ -198,6 +206,10 @@ bool Database::fetchNextPendingTask(
     Task& task
 )
 {
+    // at top of every db function
+if (PQstatus(conn_) != CONNECTION_OK) {
+    PQreset(conn_);
+}
    PGresult* result =
     PQexec(
         conn_,
@@ -280,6 +292,10 @@ PQclear(result);
 }
 std::vector<Task> Database::getAllTasks()
 {
+    // at top of every db function
+if (PQstatus(conn_) != CONNECTION_OK) {
+    PQreset(conn_);
+}
     std::vector<Task> tasks;
 
     PGresult* result =
@@ -365,6 +381,10 @@ int Database::countTasksByStatus(
     const std::string& status
 )
 {
+    // at top of every db function
+if (PQstatus(conn_) != CONNECTION_OK) {
+    PQreset(conn_);
+}
     std::string query =
         "SELECT COUNT(*) "
         "FROM tasks "
@@ -400,6 +420,10 @@ bool Database::deleteTask(
     int taskId
 )
 {
+    // at top of every db function
+if (PQstatus(conn_) != CONNECTION_OK) {
+    PQreset(conn_);
+}
     std::string query =
         "DELETE FROM tasks "
         "WHERE id=" +
@@ -436,6 +460,10 @@ bool Database::fetchTaskById(
     Task& task
 )
 {
+    // at top of every db function
+if (PQstatus(conn_) != CONNECTION_OK) {
+    PQreset(conn_);
+}
     std::string query =
         "SELECT "
         "id, "
@@ -454,6 +482,11 @@ bool Database::fetchTaskById(
             conn_,
             query.c_str()
         );
+
+    // at top of every db function
+if (PQstatus(conn_) != CONNECTION_OK) {
+    PQreset(conn_);
+}
 
     std::cout
         << "Status = "
